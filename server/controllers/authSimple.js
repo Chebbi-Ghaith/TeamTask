@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const bcrypt = require("bcryptjs");
 const generateToken = require("../utils/generateToken");
 
 // @desc    Register new user
@@ -10,32 +11,42 @@ const register = async (req, res) => {
 
     // Check if user exists
     const userExists = await User.findOne({ email });
-
     if (userExists) {
-      return res.status(400).json({ message: "User already exists" });
+      return res.status(400).json({
+        success: false,
+        message: "User already exists",
+      });
     }
 
-    // Create user
-    const user = await User.create({
+    // Hash password manually
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create user with pre-hashed password
+    const user = new User({
       name,
       email,
-      password,
+      password: hashedPassword,
       role: role || "user",
     });
 
-    if (user) {
-      res.status(201).json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        token: generateToken({ userId: user._id }),
-      });
-    } else {
-      res.status(400).json({ message: "Invalid user data" });
-    }
+    // Save without triggering pre-save hook
+    const savedUser = await user.save();
+
+    res.status(201).json({
+      success: true,
+      _id: savedUser._id,
+      name: savedUser.name,
+      email: savedUser.email,
+      role: savedUser.role,
+      token: generateToken({ userId: savedUser._id }),
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Register error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -44,7 +55,9 @@ const register = async (req, res) => {
 // @access  Public
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body; // Check for user email
+    const { email, password } = req.body;
+
+    // Find user and include password
     const user = await User.findOne({ email });
 
     if (!user) {
@@ -54,8 +67,7 @@ const login = async (req, res) => {
       });
     }
 
-    // Direct bcrypt comparison for reliability
-    const bcrypt = require("bcryptjs");
+    // Direct bcrypt comparison - no reliance on model methods
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (isMatch) {
@@ -87,21 +99,28 @@ const login = async (req, res) => {
 // @access  Private
 const getMe = async (req, res) => {
   try {
-    // req.user is already the full user object from the middleware
-    const user = req.user;
+    const user = await User.findById(req.user.userId).select("-password");
 
     if (user) {
       res.json({
+        success: true,
         _id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
       });
     } else {
-      res.status(404).json({ message: "User not found" });
+      res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("GetMe error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
