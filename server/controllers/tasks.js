@@ -78,8 +78,11 @@ const updateTask = async (req, res) => {
       return res.status(404).json({ message: "Task not found" });
     }
 
-    const isAssignedUser =
-      task.assignedTo.toString() === req.user._id.toString();
+    // Handle both populated and non-populated assignedTo
+    const assignedUserId = task.assignedTo._id
+      ? task.assignedTo._id.toString()
+      : task.assignedTo.toString();
+    const isAssignedUser = assignedUserId === req.user._id.toString();
     const isManager = req.user.role === "manager";
 
     if (!isAssignedUser && !isManager) {

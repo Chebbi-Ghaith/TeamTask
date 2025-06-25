@@ -105,8 +105,27 @@ const getMe = async (req, res) => {
   }
 };
 
+// @desc    Get all users
+// @route   GET /api/auth/users
+// @access  Private (Manager only)
+const getUsers = async (req, res) => {
+  try {
+    if (req.user.role !== "manager") {
+      return res
+        .status(403)
+        .json({ message: "Access denied. Manager role required." });
+    }
+
+    const users = await User.find({}, "name email role").sort({ name: 1 });
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   register,
   login,
   getMe,
+  getUsers,
 };
